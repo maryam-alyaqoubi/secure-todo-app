@@ -1,46 +1,28 @@
+# Use these functions to replace vulnerable ones when fixing
 import sqlite3
+from werkzeug.security import generate_password_hash, check_password_hash
 DB = 'app.db'
 
-def init_db():
+def create_user_secure(username, password):
+    hashed = generate_password_hash(password)
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, user TEXT, task TEXT)''')
+    c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed))
     conn.commit()
     conn.close()
 
-# VULNERABLE: weak create (SQL concatenation + plain password)
-def create_user_vuln(username, password):
+def get_user_secure(username):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    query = f"INSERT INTO users (username, password) VALUES ('{username}', '{password}')"
-    c.execute(query)
-    conn.commit()
-    conn.close()
-
-def get_user_vuln(username):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    # VULN: concatenated query -> SQLi
-    query = f"SELECT * FROM users WHERE username = '{username}'"
-    c.execute(query)
+    c.execute("SELECT id, username, password FROM users WHERE username = ?", (username,))
     row = c.fetchone()
     conn.close()
     return row
 
-# VULN: create todo without parameterization
-def add_todo_vuln(user, task):
+def add_todo_secure(user, task):
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    q = f"INSERT INTO todos (user, task) VALUES ('{user}', '{task}')"
-    c.execute(q)
+    c.execute("INSERT INTO todos (user, task) VALUES (?, ?)", (user, task))
     conn.commit()
     conn.close()
 
-def list_todos(user):
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("SELECT id, task FROM todos WHERE user = ?", (user,))
-    rows = c.fetchall()
-    conn.close()
-    return rows
