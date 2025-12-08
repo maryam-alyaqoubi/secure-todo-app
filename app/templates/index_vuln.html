@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>TODOs for {{ username }}</h2>
+<form method="post" action="/add">
+  <input type="text" name="task">
+  <button type="submit">Add</button>
+</form>
+<ul>
+  {% for id, task in todos %}
+    <!-- VULN: showing raw task can reflect XSS -->
+    <li>{{ task }}</li>
+  {% endfor %}
+</ul>
+{% endblock %}
