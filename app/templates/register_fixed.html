@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Register (SECURE)</h2>
+<form method="post" action="/register">
+  <label>Username: <input type="text" name="username"></label><br>
+  <label>Password: <input type="password" name="password"></label><br>
+  <!-- Example: CSRF token would be added via Flask-WTF in production -->
+  <button type="submit">Register</button>
+</form>
+<p>This page uses safe storage and input handling.</p>
+{% endblock %}
