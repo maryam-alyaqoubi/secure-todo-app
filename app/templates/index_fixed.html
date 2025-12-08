@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>TODOs for {{ username|e }}</h2>
+<form method="post" action="/add">
+  <input type="text" name="task">
+  <button type="submit">Add</button>
+</form>
+<ul>
+  {% for id, task in todos %}
+    <li>{{ task|e }}</li>
+  {% endfor %}
+</ul>
+{% endblock %}
