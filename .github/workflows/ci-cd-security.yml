@@ -1,0 +1,86 @@
+name: CI/CD Security Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          pytest -q
+        continue-on-error: false
+
+      - name: Run OWASP Dependency-Check (SCA)
+        uses: dependency-check-team/dependency-check-action@v2
+        with:
+          project: 'secure-todo-app'
+          scan: '.'
+          format: 'ALL'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect dependency-check report
+        if: always()
+        run: |
+          mkdir -p reports
+          # dependency-check outputs to dependency-check-report.html by default (or into ./dependency-check-report)
+          # action stores results in the workspace; copy whatever exists
+          find . -type f -name "dependency-check*" -exec cp {} reports/ \; || true
+
+      - name: Start Flask app (background)
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+          export FLASK_APP=app
+          nohup flask run --host=127.0.0.1 --port=5000 >/tmp/flask.log 2>&1 &
+          sleep 5
+
+      - name: Run OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v2
+        with:
+          target: 'http://127.0.0.1:5000'
+          format: 'xml'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect ZAP report
+        if: always()
+        run: |
+          mkdir -p reports
+          cp owasp-zap-report.* reports/ || true
+
+      - name: Run Sonar Scanner (optional)
+        if: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != '' }}
+        run: |
+          # Example using sonar-scanner if runner has sonar-scanner installed
+          sonar-scanner \
+            -Dsonar.projectKey=secure-todo-app \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+      - name: Upload reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: reports/
