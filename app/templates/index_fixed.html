@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Tasks for {{ username|e }}</h2>
+<form method="post" action="{{ url_for('todo.add_task') }}">
+  <input type="text" name="title" placeholder="title" required>
+  <input type="text" name="description" placeholder="description">
+  <button type="submit">Add</button>
+</form>
+<ul>
+  {% for t in todos %}
+    <li>{{ t.title|e }} - {{ t.description|e }}
+      <form method="post" action="{{ url_for('todo.complete_task', task_id=t.id) }}" style="display:inline;">
+        <button type="submit">Complete</button>
+      </form>
+      <form method="post" action="{{ url_for('todo.delete_task', task_id=t.id) }}" style="display:inline;">
+        <button type="submit">Delete</button>
+      </form>
+    </li>
+  {% endfor %}
+</ul>
+{% endblock %}
