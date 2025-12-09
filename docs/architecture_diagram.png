@@ -1,0 +1,11 @@
+User Browser (HTTPS)
+      |
+      v
+   Flask App (auth, tasks, admin)
+      |
+      v
+   MySQL Database
+      |
+      v
+CI/CD: GitHub Actions (tests, SCA, DAST) -> Artifacts
+Optional: SonarQube (SAST)
