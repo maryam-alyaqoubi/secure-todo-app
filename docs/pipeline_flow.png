@@ -1,0 +1,6 @@
+Commit -> GitHub Actions
+  -> Install & Tests
+  -> Dependency-Check (SCA)
+  -> Start App (staging)
+  -> OWASP ZAP (DAST)
+  -> Upload artifacts (reports)
