@@ -1,0 +1,78 @@
+name: CI/CD Security Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          pytest -q
+      - name: Start MySQL (docker)
+        run: |
+          docker run --name gh-mysql -e MYSQL_ROOT_PASSWORD=rootpassword -e MYSQL_DATABASE=secure_todo_db -e MYSQL_USER=todo_user -e MYSQL_PASSWORD=todo_pass -p 3306:3306 -d mysql:8.0
+          sleep 20
+
+      - name: Start Flask app (background)
+        run: |
+          source venv/bin/activate
+          export DATABASE_URL="mysql+pymysql://todo_user:todo_pass@127.0.0.1:3306/secure_todo_db"
+          export SECRET_KEY="ci-secret"
+          nohup python -m app >/tmp/flask.log 2>&1 &
+          sleep 8
+
+      - name: Dependency-Check (SCA)
+        uses: dependency-check-team/dependency-check-action@v2
+        with:
+          project: 'secure-todo-app'
+          scan: '.'
+          format: 'ALL'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect dependency-check report
+        if: always()
+        run: |
+          mkdir -p reports
+          find . -type f -name "dependency-check-report.*" -exec cp {} reports/ \; || true
+
+      - name: Run OWASP ZAP baseline
+        uses: zaproxy/action-baseline@v2
+        with:
+          target: 'http://127.0.0.1:5000'
+          format: 'xml'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect ZAP report
+        if: always()
+        run: |
+          mkdir -p reports
+          find . -type f -name "owasp-zap-report.*" -exec cp {} reports/ \; || true
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: reports/
