@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Login (VULNERABLE)</h2>
+<form method="post" action="{{ url_for('auth.login') }}">
+  <label>Username: <input type="text" name="username"></label><br>
+  <label>Password: <input type="password" name="password"></label><br>
+  <button type="submit">Login</button>
+</form>
+<p style="color:red">Vulnerable login (demo only).</p>
+{% endblock %}
