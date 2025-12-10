@@ -30,12 +30,14 @@ jobs:
     - name: Static Analysis (Bandit)
       run: |
         pip install bandit
-        bandit -r app/ -f json -o bandit-report.json || true  # لن يتوقف عند اكتشاف ثغرات
+        touch bandit-report.json  # إنشاء الملف حتى لو لم تُرجع الأداة نتائج
+        bandit -r app/ -f json -o bandit-report.json || true  # لا يتوقف عند وجود ثغرات
 
     - name: Dependency Scan (Safety)
       run: |
         pip install safety
-        safety check -r requirements.txt --full-report > safety-report.txt || true  # لن يتوقف عند مشكلات dependencies
+        touch safety-report.txt  # إنشاء الملف دائمًا
+        safety check -r requirements.txt --full-report > safety-report.txt || true
 
     - name: Upload Security Reports
       uses: actions/upload-artifact@v4
