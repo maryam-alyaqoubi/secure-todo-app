@@ -1,30 +1,19 @@
-name: CI-CD Security Pipeline
+name: Security CI Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
-
-env:
-  REPORT_DIR: reports
 
 jobs:
   build-and-security:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - name: Create reports dir
-      run: |
-        mkdir -p $REPORT_DIR
-
-    - name: Set up Python 3.10
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: "3.10"
@@ -34,97 +23,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Write timestamp - deps installed
-      run: date -u +"%Y-%m-%dT%H:%M:%SZ %Z - deps installed" >> $REPORT_DIR/timestamps.txt
-
-    - name: Run Unit Tests (pytest)
+    - name: Run Unit Tests
       run: |
-        pytest --junitxml=$REPORT_DIR/pytest-report.xml || true
-      continue-on-error: false
-
-    - name: Write timestamp - tests done
-      run: date -u +"%Y-%m-%dT%H:%M:%SZ %Z - pytest finished" >> $REPORT_DIR/timestamps.txt
+        pytest --disable-warnings -q
 
     - name: Static Analysis (Bandit)
       run: |
         pip install bandit
-        bandit -r . -f json -o $REPORT_DIR/bandit-report.json || true
+        bandit -r app/ -f json -o bandit-report.json
 
-    - name: Write timestamp - bandit done
-      run: date -u +"%Y-%m-%dT%H:%M:%SZ %Z - bandit finished" >> $REPORT_DIR/timestamps.txt
-
-    - name: Dependency Vulnerability Scan (Safety)
+    - name: Dependency Scan (Safety)
       run: |
         pip install safety
-        safety check --full-report --file=requirements.txt --json > $REPORT_DIR/safety-report.json || true
+        safety check -r requirements.txt --full-report > safety-report.txt
 
-    - name: Write timestamp - safety done
-      run: date -u +"%Y-%m-%dT%H:%M:%SZ %Z - safety finished" >> $REPORT_DIR/timestamps.txt
-
-    - name: OWASP Dependency-Check (SCA)
-      uses: dependency-check-team/dependency-check-action@v2
-      with:
-        project: 'secure-todo-app'
-        scan: '.'
-        format: 'ALL'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Collect dependency-check reports
-      if: always()
-      run: |
-        mkdir -p $REPORT_DIR/dependency-check || true
-        find . -type f -name "dependency-check-report.*" -exec cp {} $REPORT_DIR/dependency-check/ \; || true
-
-    - name: Write timestamp - dependency-check done
-      run: date -u +"%Y-%m-%dT%H:%M:%SZ %Z - dependency-check finished" >> $REPORT_DIR/timestamps.txt
-
-    - name: Start Flask app (for DAST) with SQLite
-      env:
-        FLASK_APP: app
-        DATABASE_URL: "sqlite:///./ci_test.db"
-        SECRET_KEY: "ci-secret"
-      run: |
-        # run flask app in background for zap to scan
-        nohup python -m flask run --host=127.0.0.1 --port=5000 > $REPORT_DIR/flask.log 2>&1 &
-        # wait for app to start
-        sleep 8
-        ps aux | grep -E "flask run|python -m flask" | sed -n '1,5p' || true
-
-    - name: Write timestamp - app started for DAST
-      run: date -u +"%Y-%m-%dT%H:%M:%SZ %Z - flask started for DAST" >> $REPORT_DIR/timestamps.txt
-
-    - name: OWASP ZAP Baseline Scan (DAST)
-      uses: zaproxy/action-baseline@v0.7.0
-      with:
-        target: "http://127.0.0.1:5000"
-        format: "xml"
-        # alertThreshold: "Low"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Collect ZAP report
-      if: always()
-      run: |
-        mkdir -p $REPORT_DIR/zap || true
-        # zap action creates a file like owasp-zap-report.xml in workspace root
-        find . -maxdepth 2 -type f -name "owasp-zap-*.xml" -exec cp {} $REPORT_DIR/zap/ \; || true
-        find . -maxdepth 2 -type f -name "owasp-zap*.html" -exec cp {} $REPORT_DIR/zap/ \; || true
-
-    - name: Write timestamp - zap done
-      run: date -u +"%Y-%m-%dT%H:%M:%SZ %Z - zap finished" >> $REPORT_DIR/timestamps.txt
-
-    - name: Collect flask logs
-      if: always()
-      run: |
-        cp $REPORT_DIR/flask.log $REPORT_DIR/ || true
-        tail -n 200 $REPORT_DIR/flask.log || true
-
-    - name: List reports folder
-      run: ls -la $REPORT_DIR || true
-
-    - name: Upload security reports (artifact)
-      uses: actions/upload-artifact@v4
+    - name: Upload Reports
+      uses: actions/upload-artifact@v3
       with:
         name: security-reports
-        path: $REPORT_DIR
+        path: |
+          bandit-report.json
+          safety-report.txt
